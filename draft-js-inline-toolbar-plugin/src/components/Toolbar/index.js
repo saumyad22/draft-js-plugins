@@ -46,9 +46,8 @@ export default class Toolbar extends React.Component {
    * this function again with `undefined` in order to reset `overrideContent`.
    * @param {Component} overrideContent
    */
-  onOverrideContent = (overrideContent) => {
+  onOverrideContent = (overrideContent) =>
     this.setState({ overrideContent });
-  }
 
   onSelectionChanged = () => {
     // need to wait a tick for window.getSelection() to be accurate
@@ -63,7 +62,7 @@ export default class Toolbar extends React.Component {
 
       const position = {
         top: (selectionRect.top - relativeRect.top) - toolbarHeight,
-        left: (selectionRect.left - relativeRect.left) + (selectionRect.width / 2),
+        left: this.calculateToolbarLeft(selectionRect, relativeRect)
       };
       this.setState({ position });
     });
@@ -73,9 +72,7 @@ export default class Toolbar extends React.Component {
     const { store } = this.props;
     const { overrideContent, position } = this.state;
     const selection = store.getItem('getEditorState')().getSelection();
-    // overrideContent could for example contain a text input, hence we always show overrideContent
-    // TODO: Test readonly mode and possibly set isVisible to false if the editor is readonly
-    const isVisible = (!selection.isCollapsed() && selection.getHasFocus()) || overrideContent;
+    const isVisible = (!selection.isCollapsed() || overrideContent) && selection.getHasFocus();
     const style = { ...position };
 
     if (isVisible) {
@@ -90,9 +87,43 @@ export default class Toolbar extends React.Component {
     return style;
   }
 
+  calculateToolbarLeft(selectionRect, relativeRect) {
+    const toolbarWidth = this.toolbar.offsetWidth + 4;
+    const defualtToolbarLeft = (selectionRect.left - relativeRect.left) + (selectionRect.width / 2);
+    const outOfWindowPixlesLeft = defualtToolbarLeft - (toolbarWidth / 2);
+    const outOfWindowPixlesRight = relativeRect.width - (defualtToolbarLeft + (toolbarWidth / 2));
+
+    if (outOfWindowPixlesLeft < 0) {
+      this.adjustToolbarPointer(outOfWindowPixlesLeft + (toolbarWidth / 2));
+      return defualtToolbarLeft + Math.abs(outOfWindowPixlesLeft);
+    } else if (outOfWindowPixlesRight < 0) {
+      this.adjustToolbarPointer((toolbarWidth / 2) - outOfWindowPixlesRight);
+      return defualtToolbarLeft + outOfWindowPixlesRight;
+    }
+
+    this.adjustToolbarPointer(toolbarWidth / 2);
+    return defualtToolbarLeft;
+  }
+
   handleToolbarRef = (node) => {
     this.toolbar = node;
   };
+
+  adjustToolbarPointer(leftAttribute) {
+    const { theme } = this.props;
+    const toolbarPointerNode = document.querySelector('.toolbar-pointer');
+    const wordPointerStyle = document.createElement('style');
+
+    if (toolbarPointerNode) {
+      toolbarPointerNode.remove();
+    }
+
+    wordPointerStyle.className = 'toolbar-pointer';
+
+    document.head.appendChild(wordPointerStyle);
+    wordPointerStyle.sheet.insertRule(`.${theme.toolbarStyles.toolbar}::after { left: ${leftAttribute}px}`, 0);
+    wordPointerStyle.sheet.insertRule(`.${theme.toolbarStyles.toolbar}::before { left: ${leftAttribute}px}`, 0);
+  }
 
   render() {
     const { theme, store, structure } = this.props;
